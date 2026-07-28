@@ -58,13 +58,9 @@ on:
         required: false
       # ==================== 选项配置 ====================
       use_kpm:
-        description: "KPM 功能（patched 尚不支持）"
-        type: choice
-        default: "disabled (关闭)"
-        options:
-          - "disabled (关闭)"
-          - "enabled (开启)"
-          - "patched (开启并修补，尚不支持)"
+        description: "启用 KPM 功能"
+        type: boolean
+        default: false
       droidspaces:
         description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
         type: choice
@@ -105,19 +101,19 @@ on:
       build_a12_5_10:
         description: "Android 12 - 5.10"
         type: boolean
-        default: false
+        default: true
       build_a13_5_15:
         description: "Android 13 - 5.15"
         type: boolean
-        default: false
+        default: true
       build_a14_6_1:
         description: "Android 14 - 6.1"
         type: boolean
-        default: false
+        default: true
       build_a15_6_6:
         description: "Android 15 - 6.6"
         type: boolean
-        default: false
+        default: true
       build_a16_6_12:
         description: "Android 16 - 6.12"
         type: boolean
@@ -125,7 +121,7 @@ on:
       build_all:
         description: "构建全部版本"
         type: boolean
-        default: true
+        default: false
 
 jobs:
   # ==================== 获取管理器 ====================
@@ -279,7 +275,7 @@ jobs:
   # 当 release_type 不是 Actions 时，创建 GitHub Release
   # 仅限原仓库运行，fork 仓库跳过此步骤
   release:
-    if: ${{ always() && !cancelled() && inputs.release_type != 'Actions' && github.repository == 'zzh20188/GKI_KernelSU_SUSFS' }}
+    if: ${{ always() && !cancelled() && inputs.release_type != 'Actions' && github.repository == 'mikugirls/GKI_KernelSU_SUSFS' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -292,7 +288,6 @@ jobs:
       - build-a15-6-6
       - build-a16-6-12
 
-    # ==================== 环境变量 ====================
     env:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
@@ -321,13 +316,7 @@ jobs:
           # 功能开关显示
           echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
           echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
-          if [[ "${{ inputs.use_kpm }}" == enabled* ]]; then
-            echo "KPM_STATUS=支持" >> $GITHUB_ENV
-          elif [[ "${{ inputs.use_kpm }}" == patched* ]]; then
-            echo "KPM_STATUS=支持（补丁尚不支持）" >> $GITHUB_ENV
-          else
-            echo "KPM_STATUS=未开启" >> $GITHUB_ENV
-          fi
+          echo "KPM_STATUS=${{ inputs.use_kpm && '启用' || '禁用' }}" >> $GITHUB_ENV
 
           # Hook 类型
           if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "ReSukiSU" ]; then
@@ -399,7 +388,7 @@ jobs:
             "Official") REPO_URL="https://github.com/tiann/KernelSU.git"; REPO_URL2="tiann/KernelSU" ;;
             "Next") REPO_URL="https://github.com/KernelSU-Next/KernelSU-Next.git"; REPO_URL2="KernelSU-Next/KernelSU-Next" ;;
             "SukiSU") REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"; REPO_URL2="SukiSU-Ultra/SukiSU-Ultra" ;;
-            "ReSukiSU") REPO_URL="https://github.com/ReSukiSU/ReSukiSU.git"; REPO_URL2="ReSukiSU/ReSukiSU" ;;
+            "ReSukiSU") REPO_URL="https://github.com/mikugirls/ReSukiSU.git"; REPO_URL2="ReSukiSU/ReSukiSU" ;;
           esac
 
           if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] && [ -f "config/config" ]; then
@@ -518,13 +507,12 @@ jobs:
 
           ### 下载说明
 
-          请在下方 **Assets** 中下载对应文件。
+          请在下方 **Assets** 中下载对应的 **`.zip` 压缩包**，其中包含该次构建的所有内核文件（AnyKernel3、boot.img 等）。
 
-          | 文件类型 | 用途 |
+          | 压缩包名称 | 内容 |
           |:---|:---|
-          | \`*_kernel-*.zip\` | AnyKernel3 内核刷入包 |
-          | \`*.img\` | boot、vendor_boot 等镜像文件 |
-          | \`*.apk\` | KernelSU 管理器 |
+          | \`*_kernel-*.zip\` | 对应版本的内核刷入包（AnyKernel3）及镜像文件 |
+          | \`*-Manager(*).zip\` | KernelSU 管理器 APK |
           | \`susfs-*.zip\` | SUSFS 配套模块 |
 
           > [!IMPORTANT]
@@ -589,12 +577,6 @@ jobs:
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
           echo "生成标签: $NEW_TAG"
 
-      # ==================== 下载构建产物 ====================
-      - name: 下载构建产物
-        uses: actions/download-artifact@v8
-        with:
-          path: ./downloaded-artifacts
-
       # ==================== 创建 GitHub Release ====================
       - name: 创建 GitHub Release
         run: |
@@ -609,33 +591,23 @@ jobs:
             --target "$GITHUB_SHA" \
             $PRERELEASE_FLAG
 
-      # ==================== 上传管理器和模块 ====================
-      - name: 上传管理器和 SUSFS 模块
-        continue-on-error: true
+      # ==================== 上传所有 artifacts 至 Release ====================
+      # 直接通过 API 获取当前 workflow run 的所有 artifacts（保留 zip 压缩包）并上传
+      # 跳过名称中包含 -Rejects 或等于 AIO-REJ 的 artifact（补丁冲突文件不上传）
+      - name: 上传所有 artifacts 至 Release（跳过 -Rejects 和 AIO-REJ）
         run: |
-          echo "准备上传 APK 与 SUSFS 模块..."
-          apk_count=$(find ./downloaded-artifacts -type f -name "*.apk" | wc -l || true)
-          sus_count=$(find ./downloaded-artifacts -type f -path "./downloaded-artifacts/susfs-*/*" | wc -l || true)
-          echo "APK files: ${apk_count}"
-          echo "SUSFS files: ${sus_count}"
-          find ./downloaded-artifacts -type f -name "*.apk" -print0 | \
-          while IFS= read -r -d '' f; do
-            gh release upload "$NEW_TAG" "$f" || true
-          done
-          find ./downloaded-artifacts -type f -path "./downloaded-artifacts/susfs-*/*" -print0 | \
-          while IFS= read -r -d '' f; do
-            gh release upload "$NEW_TAG" "$f" || true
-          done
-
-      # ==================== 上传内核产物 ====================
-      - name: 上传内核产物
-        run: |
-          for file in ./downloaded-artifacts/*_kernel-*/*; do
-            [ -d "$file" ] && continue
-            # 跳过 -Rejects 目录中的文件（已在 collect-rejects 中汇总处理）
-            [[ "$file" == *-Rejects/* ]] && continue
-            echo "上传 $file..."
-            gh release upload "$NEW_TAG" "$file"
+          echo "获取当前 run 的 artifacts..."
+          ARTIFACTS_JSON=$(gh api --paginate repos/$REPO_OWNER/$REPO_NAME/actions/runs/${{ github.run_id }}/artifacts)
+          echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | "\(.name)\t\(.archive_download_url)"' | while IFS=$'\t' read -r name url; do
+            # 跳过名称中包含 -Rejects 或等于 AIO-REJ 的 artifact（补丁冲突文件不上传）
+            if [[ "$name" == *"-Rejects"* ]] || [[ "$name" == "AIO-REJ" ]]; then
+              echo "跳过 artifact: $name（补丁冲突文件不上传）"
+              continue
+            fi
+            echo "下载 artifact: $name"
+            curl -L -H "Authorization: Bearer $GITHUB_TOKEN" -o "${name}.zip" "$url"
+            echo "上传 ${name}.zip 到 Release $NEW_TAG"
+            gh release upload "$NEW_TAG" "${name}.zip" --clobber
           done
 
       # ==================== 构建摘要 ====================

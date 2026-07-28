@@ -2,14 +2,14 @@ name: Auto Trigger on SukiSU Update
 
 on:
   schedule:
-    - cron: '0 0 */3 * *'  # 每两天执行一次
+    - cron: '0 20 * * *'  # 每天执行一次
   workflow_dispatch:     # 允许手动触发
 
 jobs:
   check-and-trigger:
     runs-on: ubuntu-latest
     # 如果要运行自动编译工作流，请手动添加/修改仓库所有者用户名
-    if: contains(fromJSON('["zzh20188", "elysias123"]'), github.repository_owner)
+    if: contains(fromJSON('["zzh20188","elysias123","mikugirls"]'), github.repository_owner)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -20,14 +20,13 @@ jobs:
       - name: Get latest commit SHA from SukiSU-Ultra
         id: get_sha
         run: |
-          LATEST_SHA=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/commits/main | jq -r '.sha')
+          LATEST_SHA=$(curl -s https://api.github.com/repos/mikugirls/ReSukiSU/commits/main | jq -r '.sha')
           echo "sha=$LATEST_SHA" >> $GITHUB_OUTPUT
           echo "Latest SHA: $LATEST_SHA"
           
       - name: Get previous SHA from sha branch
         id: get_prev_sha
         run: |
-
           if git ls-remote --heads origin sha | grep -q sha; then
             echo "SHA branch exists, fetching previous SHA..."
             git fetch origin sha:sha || true
@@ -44,7 +43,6 @@ jobs:
             echo "prev_sha=" >> $GITHUB_OUTPUT
             echo "SHA branch does not exist yet"
           fi
-
           git checkout ${{ github.ref_name }}
           
       - name: Compare with previous SHA
@@ -67,9 +65,7 @@ jobs:
       - name: Update SHA file in sha branch
         if: steps.compare.outputs.new_commit == 'true'
         run: |
-
           git checkout sha 2>/dev/null || git checkout --orphan sha
-          
 
           if [ ! -f "latest_sha.txt" ]; then
             git rm -rf . 2>/dev/null || true
@@ -83,23 +79,33 @@ jobs:
           git commit -m "Update SukiSU latest SHA to ${{ steps.get_sha.outputs.sha }}" || exit 0
           git push origin sha
           
-      # - name: Trigger test_release.yml workflow
-      #   if: steps.compare.outputs.new_commit == 'true'
-      #   run: |
-      #      curl -X POST \
-      #       -H "Accept: application/vnd.github+json" \
-      #       -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-      #       -H "X-GitHub-Api-Version: 2022-11-28" \
-      #       https://api.github.com/repos/${{ github.repository }}/actions/workflows/test_release.yml/dispatches \
-      #       -d '{
-      #         "ref": "dev",
-      #         "inputs": {
-      #           "make_release": "true",
-      #           "kernelsu_variant": "SukiSU",
-      #           "version": "",
-      #           "use_zram": "false",
-      #           "use_bbg": "true",
-      #           "use_kpm": "true",
-      #           "get_manager": "true"
-      #         }
-      #       }'
+      - name: Trigger main.yml workflow
+        if: steps.compare.outputs.new_commit == 'true'
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches \
+            -d '{
+              "ref": "dev",
+              "inputs": {
+                "release_type": "Release",
+                "kernelsu_variant": "ReSukiSU",
+                "version": "",
+                "use_zram": "true",
+                "use_bbg": "true",
+                "use_kpm": "true",
+                "use_rekernel": "false",
+                "cve_2026_43499_patch": "true",
+                "cancel_susfs": "false",
+                "droidspaces": "678",
+                "droidspaces_ntsync": "true",
+                "build_a12_5_10": "true",
+                "build_a13_5_15": "true",
+                "build_a14_6_1": "true",
+                "build_a15_6_6": "true",
+                "build_a16_6_12": "false",
+                "build_all": "false"
+              }
+            }'

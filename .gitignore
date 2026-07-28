@@ -41,7 +41,6 @@ Image
 Image.gz
 Image.lz4
 *.img
-*.zip
 
 # Temporary files
 *.temp

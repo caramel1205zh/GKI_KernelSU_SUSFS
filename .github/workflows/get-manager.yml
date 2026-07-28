@@ -81,7 +81,7 @@ jobs:
             git -C KernelSU checkout 3170a48c508f6330ea636c51835a84573fe56ef5
           elif [ "${{ inputs.kernelsu_variant }}" == "ReSukiSU" ]; then
             echo "This is the ReSukiSU variant"
-            git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
+            git clone https://github.com/mikugirls/ReSukiSU.git KernelSU
           elif [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "This is the Official"
             git clone https://github.com/tiann/KernelSU.git KernelSU
@@ -90,11 +90,23 @@ jobs:
             exit 1
           fi
 
-          cd KernelSU
+          # ---- 针对 ReSukiSU 使用原版 commit 数（与内核保持一致） ----
+          if [ "${{ inputs.kernelsu_variant }}" == "ReSukiSU" ]; then
+              LINK_HEADER=$(curl -s -I "https://api.github.com/repos/ReSukiSU/ReSukiSU/commits?sha=main&per_page=1" | grep -i "^link:")
+              if [ -n "$LINK_HEADER" ]; then
+                  KSU_GIT_VERSION=$(echo "$LINK_HEADER" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p')
+              fi
+              if [ -z "$KSU_GIT_VERSION" ]; then
+                  echo "⚠️ API 获取失败，使用本地仓库 commit 计数作为降级"
+                  KSU_GIT_VERSION=$(git -C KernelSU rev-list --count HEAD)
+              fi
+          else
+              cd KernelSU
+              KSU_GIT_VERSION=$(git rev-list --count HEAD)
+              cd ..
+          fi
 
           # 计算KSU版本号
-          KSU_GIT_VERSION=$(git rev-list --count HEAD)
-
           if [ "${{ inputs.kernelsu_variant }}" == "SukiSU" ]; then
             KSU_VERSION=$((40000 + KSU_GIT_VERSION - 2815))
           elif [ "${{ inputs.kernelsu_variant }}" == "SukiSU(40726)" ]; then
@@ -104,7 +116,7 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "ReSukiSU" ]; then
             KSU_VERSION=$((30700 + KSU_GIT_VERSION))
           elif [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-            KSU_VERSION=$((20000 + KSU_GIT_VERSION))
+            KSU_VERSION=$((30000 + KSU_GIT_VERSION))
           elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             KSU_VERSION=$((30000 + KSU_GIT_VERSION))
           fi
@@ -160,7 +172,7 @@ jobs:
             KSUM="manager"
           elif [ "${{ inputs.kernelsu_variant }}" == "ReSukiSU" ]; then
             echo "ReSukiSU..."
-            REPO="ReSukiSU/ReSukiSU"
+            REPO="mikugirls/ReSukiSU"
             KSUM="manager"
           elif [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "KSU..."
@@ -192,7 +204,7 @@ jobs:
             case "${{ inputs.kernelsu_variant }}" in
               "SukiSU") echo $((40000 + git_version - 2815)) ;;
               "ReSukiSU") echo $((30700 + git_version)) ;;
-              "Official") echo $((20000 + git_version)) ;;
+              "Official") echo $((30000 + git_version)) ;;
               "Next") echo $((30000 + git_version)) ;;
               *) return 1 ;;
             esac
@@ -241,9 +253,14 @@ jobs:
                 echo "跳过构建 $BUILD_ID: 无法根据提交 $HEAD_SHA 计算 KSU 版本"
                 continue
               fi
-              if [ "$RUN_KSU_VERSION" -gt "$TARGET_KSU_VERSION" ]; then
-                echo "跳过构建 $BUILD_ID ($HEAD_BRANCH): Manager KSU $RUN_KSU_VERSION 高于内核 KSU $TARGET_KSU_VERSION"
-                continue
+              # ---- 对 ReSukiSU 允许版本高于内核（向下兼容），其他变体保持限制 ----
+              if [ "${{ inputs.kernelsu_variant }}" == "ReSukiSU" ]; then
+                  echo "ReSukiSU: 允许 Manager 版本 $RUN_KSU_VERSION (高于内核 $TARGET_KSU_VERSION 也可接受)"
+              else
+                  if [ "$RUN_KSU_VERSION" -gt "$TARGET_KSU_VERSION" ]; then
+                      echo "跳过构建 $BUILD_ID ($HEAD_BRANCH): Manager KSU $RUN_KSU_VERSION 高于内核 KSU $TARGET_KSU_VERSION"
+                      continue
+                  fi
               fi
 
               ARTIFACTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \

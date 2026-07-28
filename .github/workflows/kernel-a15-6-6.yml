@@ -29,14 +29,10 @@ on:
         type: string
         default: "Sun Dec 01 08:10:00 UTC 2024"
       use_kpm:
-        description: "KPM 功能（patched 尚不支持）"
+        description: "启用 KPM 功能"
         required: true
-        type: choice
-        default: "disabled (关闭)"
-        options:
-          - "disabled (关闭)"
-          - "enabled (开启)"
-          - "patched (开启并修补，尚不支持)"
+        type: boolean
+        default: false
       droidspaces:
         description: "Droidspaces 容器支持"
         required: false
@@ -110,7 +106,7 @@ on:
         type: boolean
       use_kpm:
         required: true
-        type: string
+        type: boolean
       use_rekernel:
         required: false
         type: boolean

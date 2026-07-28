@@ -50,8 +50,8 @@ on:
         default: true
       use_kpm:
         required: true
-        type: string
-        default: "disabled (关闭)"
+        type: boolean
+        default: true
       use_rekernel:
         required: false
         type: boolean
@@ -397,7 +397,7 @@ jobs:
         working-directory: ${{ env.KERNEL_ROOT }}/common/drivers
         run: |
           echo "下载一加 8E 支持补丁..."
-          curl -LSs "https://github.com/zzh20188/GKI_KernelSU_SUSFS/raw/refs/heads/dev/hmbird_patch.c" -o hmbird_patch.c
+          curl -LSs "https://github.com/mikugirls/GKI_KernelSU_SUSFS/raw/refs/heads/dev/hmbird_patch.c" -o hmbird_patch.c
           echo "obj-y += hmbird_patch.o" >> Makefile
 
       - name: 确定 KernelSU 分支
@@ -477,7 +477,7 @@ jobs:
               ;;
             "ReSukiSU")
               echo "添加 ReSukiSU..."
-              curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+              curl -LSs "https://raw.githubusercontent.com/mikugirls/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
               ;;
             *)
               if [ -z "$LEGACY_SUKISU_CONFIG" ]; then
@@ -854,7 +854,6 @@ jobs:
                   echo "Android 15 6.6.50~6.6.58 task_mmu.c 归档修复补丁已应用或当前上下文不匹配，跳过"
                 fi
               fi
-
             fi
 
             # Android 16 - 6.12 修复
@@ -878,6 +877,21 @@ jobs:
             fi
           fi
 
+
+      - name: 修复 5.10 内核 set_nameidata 调用参数不匹配
+        if: inputs.enable_susfs && inputs.kernel_version == '5.10'
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          echo "修复 5.10 内核 set_nameidata 4参数调用为3参数..."
+          sed -i 's/set_nameidata(\([^,]*\), \([^,]*\), \([^,]*\), NULL);/set_nameidata(\1, \2, \3);/g' fs/namei.c
+          echo "修复完成。"
+
+      - name: 克隆 NTsync 补丁仓库
+        if: inputs.droidspaces_ntsync
+        run: |
+          git clone --depth 1 https://github.com/Goldzxcbug/Droidspaces_Kernel_patch.git /tmp/Droidspaces_Kernel_patch
+          echo "NTSYNC_PATCHES=/tmp/Droidspaces_Kernel_patch/NTsync" >> $GITHUB_ENV
+
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
@@ -886,6 +900,59 @@ jobs:
 
       - name: 备份基准 defconfig
         run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
+
+      - name: 集成 NTsync 支持
+        if: inputs.droidspaces_ntsync
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          KERNEL_VER="${{ inputs.kernel_version }}"
+          SLOT="${{ inputs.droidspaces_ntsync }}"
+
+          PATCH_FILE1="$NTSYNC_PATCHES/ntsync_base.patch"
+
+          # 选择补丁
+          case "$KERNEL_VER" in
+            6.12)
+              PATCH_FILE2="$NTSYNC_PATCHES/ntsync_compat_android16-6.12.patch"
+              ;;
+            6.6)
+              PATCH_FILE2="$NTSYNC_PATCHES/ntsync_compat_android15-6.6.patch"
+              ;;
+            6.1)
+              PATCH_FILE2="$NTSYNC_PATCHES/ntsync_compat_android14-6.1.patch"
+              ;;
+            5.15)
+              PATCH_FILE2="$NTSYNC_PATCHES/ntsync_compat_android13-5.15.patch"
+              ;;
+            5.10)
+              PATCH_FILE2="$NTSYNC_PATCHES/ntsync_compat_android12-5.10.patch"
+              #PATCH_FILE3="$NTSYNC_PATCHES/ntsync_compat_android12-5.10_OOS14.patch"
+              ;;
+            *)
+              echo "::warning::Droidspaces: 未适配的内核版本 $KERNEL_VER，跳过补丁"
+              exit 0
+              ;;
+          esac
+
+          if ! patch -p1 --forward < "$PATCH_FILE1"; then
+            echo "NTsync base补丁应用失败，可能已应用或上下文不匹配"
+          fi
+
+          if ! patch -p1 --forward < "$PATCH_FILE2"; then
+            echo ":内核对应版本NTsync补丁应用失败，可能已应用或上下文不匹配"
+          fi
+
+          #if [ -n "$PATCH_FILE3" ]; then
+          #  echo "正在应用5.10 OOS14专属ntsync兼容补丁..."
+          #  if ! patch -p1 --forward < "$PATCH_FILE3"; then
+          #    echo "5.10 OOS14专属补丁应用失败，可能已打过"
+          #  fi
+          #fi
+
+          echo "添加 NTsync 内核配置..."
+          sed -i '/CONFIG_NTSYNC is not set/d' ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NTSYNC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "NTsync 集成完成"
 
       - name: 集成 Droidspaces 支持
         if: inputs.droidspaces != 'off'
@@ -985,7 +1052,10 @@ jobs:
           # REJECT 目标在不同内核版本上的符号名可能不同，按实际存在的配置启用
           enable_config_if_defined CONFIG_NETFILTER_XT_TARGET_REJECT
           enable_config_if_defined CONFIG_IP_NF_TARGET_REJECT
-
+          # 开启用户命名空间
+          enable_config_if_defined CONFIG_USER_NS
+          # 安全伪装：注释敏感配置，功能保留不卡开机，骗过 VINTF
+          sed -i 's/^CONFIG_SYSVIPC=y/# CONFIG_SYSVIPC is not set/' "$DEFCONFIG"
           echo "Droidspaces 集成完成"
 
           echo "GKI6.6 普通用户联网专用配置 (Droidspaces)"
@@ -1004,66 +1074,9 @@ jobs:
           }
 
           if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
-            # 1. 开启用户命名空间（必须）
-            # enable_config_if_defined CONFIG_USER_NS
-            # 2. 关闭安卓严格网络控制（必须）
+            # 关闭安卓严格网络控制（必须）
             disable_config CONFIG_ANDROID_PARANOID_NETWORK
           fi
-
-      - name: 注入 NTSync 内核配置
-        if: inputs.droidspaces != 'off' && inputs.droidspaces_ntsync
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          set -e
-          echo "=== 开始注入 NTSync 内核补丁 ==="
-          echo "Android 版本: ${{ inputs.android_version }}"
-          echo "Kernel 版本: ${{ inputs.kernel_version }}"
-
-          case "${{ inputs.android_version }}-${{ inputs.kernel_version }}" in
-            android12-5.10)
-              NTSYNC_PATCH="ntsync_compat_android12-5.10"
-              ;;
-            android13-5.15)
-              NTSYNC_PATCH="ntsync_compat_android13-5.15"
-              ;;
-            android14-6.1)
-              NTSYNC_PATCH="ntsync_compat_android14-6.1"
-              ;;
-            android15-6.6)
-              NTSYNC_PATCH="ntsync_compat_android15-6.6"
-              ;;
-            android16-6.12)
-              NTSYNC_PATCH="ntsync_compat_android16-6.12"
-              ;;
-            *)
-              echo "::warning::NTSync: 未适配 ${{ inputs.android_version }} / ${{ inputs.kernel_version }}，跳过补丁"
-              exit 0
-              ;;
-          esac
-
-          echo "自动选择 NTSync 补丁: ${NTSYNC_PATCH}.patch"
-          wget -q "https://raw.githubusercontent.com/Goldzxcbug/Droidspaces_Kernel_patch/refs/heads/main/NTsync/ntsync_base.patch"
-          wget -q "https://raw.githubusercontent.com/Goldzxcbug/Droidspaces_Kernel_patch/refs/heads/main/NTsync/${NTSYNC_PATCH}.patch"
-
-          patch -p1 < "ntsync_base.patch"
-          patch -p1 < "${NTSYNC_PATCH}.patch"
-
-          cd ..
-
-          # 配置路径
-          CONFIG_PATH="./common/arch/arm64/configs/gki_defconfig"
-          echo "正在检查并启用 CONFIG_NTSYNC..."
-
-          # 移除未启用标记，再追加启用项，保证重复运行时保持幂等。
-          sed -i '/CONFIG_NTSYNC is not set/d' "$CONFIG_PATH"
-          if ! grep -q "^CONFIG_NTSYNC=y" "$CONFIG_PATH"; then
-            echo "CONFIG_NTSYNC=y" >> "$CONFIG_PATH"
-            echo "✅ 已成功启用 CONFIG_NTSYNC"
-          else
-            echo "✅ CONFIG_NTSYNC 已处于启用状态"
-          fi
-
-          echo "=== NTSync 补丁与配置注入完成 ==="
 
       - name: 应用 Unicode 绕过修复
         if: inputs.enable_susfs
@@ -1246,12 +1259,12 @@ jobs:
           EOF
 
           if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "SukiSU(40726)" ] || [ "${{ inputs.ksu_variant }}" == "SukiSU(40548)" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
-            if [[ "${{ inputs.use_kpm }}" == enabled* ]] || [[ "${{ inputs.use_kpm }}" == patched* ]]; then
+            if [ "${{ inputs.use_kpm }}" == "true" ]; then
               if ! grep -RqsE '^[[:space:]]*config[[:space:]]+KPM([[:space:]]|$)' common KernelSU 2>/dev/null; then
-                echo "错误: 已请求启用 KPM，但当前 KernelSU 代码未声明 CONFIG_KPM" >&2
-                exit 1
+                echo "::warning::已请求启用 KPM，但当前 KernelSU 代码未声明 CONFIG_KPM，可能补丁未生效"
+              else
+                echo "CONFIG_KPM=y" >> "$DEFCONFIG"
               fi
-              echo "CONFIG_KPM=y" >> "$DEFCONFIG"
             fi
           fi
 
@@ -1420,26 +1433,26 @@ jobs:
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
 
-      # - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
-      #   if: startsWith(inputs.use_kpm, 'patched') && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU' || inputs.ksu_variant == 'Next')
-      #   run: |
-      #     case "${{ inputs.android_version }}" in
-      #       "android12"|"android13")
-      #         if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
-      #           TARGET_PATH="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
-      #         fi
-      #         ;;
-      #       "android14"|"android15"|"android16")
-      #         TARGET_PATH="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/"
-      #         ;;
-      #     esac
+      - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
+        if: inputs.use_kpm && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU' || inputs.ksu_variant == 'Next')
+        run: |
+          case "${{ inputs.android_version }}" in
+            "android12"|"android13")
+              if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
+                TARGET_PATH="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
+              fi
+              ;;
+            "android14"|"android15"|"android16")
+              TARGET_PATH="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/"
+              ;;
+          esac
 
-      #     cp -r $SUKISU_PATCHES/kpm/patch_linux "$TARGET_PATH/patch"
-      #     cd "$TARGET_PATH"
-      #     chmod 777 patch
-      #     ./patch
-      #     rm -rf Image
-      #     mv oImage Image
+          cp -r $SUKISU_PATCHES/kpm/patch_linux "$TARGET_PATH/patch"
+          cd "$TARGET_PATH"
+          chmod 777 patch
+          ./patch
+          rm -rf Image
+          mv oImage Image
 
       - name: 准备 Boot 镜像
         run: |
