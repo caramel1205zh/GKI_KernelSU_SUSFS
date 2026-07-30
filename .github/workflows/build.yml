@@ -584,11 +584,11 @@ jobs:
             CURRENT_SUB=99999
           fi
 
-          # 兜底兼容 SUSFS 上游误将 5.15+ 的 set_nameidata 四参数调用用于 Android 12 5.10，上游修复后自动跳过
-          if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]] \
+          # 兜底兼容 SUSFS 上游误将 5.15+ 的 set_nameidata 四参数调用用于 Android 12/13 5.10，上游修复后自动跳过
+          if [[ "${{ inputs.kernel_version }}" == "5.10" ]] \
             && grep -qF 'static void set_nameidata(struct nameidata *p, int dfd, struct filename *name)' fs/namei.c \
             && grep -qF 'set_nameidata(nd, old_dfd, fake_filename, NULL);' "$SUSFS_PATCH"; then
-            echo "检测到 Android 12 5.10 set_nameidata 三参数接口，修正 SUSFS 补丁中的四参数调用"
+            echo "检测到 5.10 set_nameidata 三参数接口，修正 SUSFS 补丁中的四参数调用"
             sed -i 's/set_nameidata(nd, old_dfd, fake_filename, NULL);/set_nameidata(nd, old_dfd, fake_filename);/g' "$SUSFS_PATCH"
           fi
 
@@ -884,15 +884,6 @@ jobs:
               fi
             fi
           fi
-
-
-      - name: 修复 5.10 内核 set_nameidata 调用参数不匹配
-        if: inputs.enable_susfs && inputs.kernel_version == '5.10'
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          echo "修复 5.10 内核 set_nameidata 4参数调用为3参数..."
-          sed -i 's/set_nameidata(\([^,]*\), \([^,]*\), \([^,]*\), NULL);/set_nameidata(\1, \2, \3);/g' fs/namei.c
-          echo "修复完成。"
 
       - name: 克隆 NTsync 补丁仓库
         if: inputs.droidspaces_ntsync
