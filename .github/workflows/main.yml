@@ -91,9 +91,13 @@ on:
       cve_2026_43499_patch:
         description: "应用 CVE-2026-43499 rtmutex 修复链"
         type: boolean
-        default: false
+        default: true
       cancel_susfs:
         description: "禁用 SUSFS"
+        type: boolean
+        default: false
+      enable_nomount:
+        description: "启用 NoMount"
         type: boolean
         default: false
 
@@ -150,6 +154,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces }}
       artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+      enable_nomount: ${{ inputs.enable_nomount }}
       called_from_main: true
 
   # ==================== Android 13 - 5.15 构建 ====================
@@ -170,6 +175,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces }}
       artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+      enable_nomount: ${{ inputs.enable_nomount }}
       called_from_main: true
 
   # ==================== Android 14 - 6.1 构建 ====================
@@ -190,6 +196,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces }}
       artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+      enable_nomount: ${{ inputs.enable_nomount }}
       called_from_main: true
 
   # ==================== Android 15 - 6.6 构建 ====================
@@ -210,6 +217,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces }}
       artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+      enable_nomount: ${{ inputs.enable_nomount }}
       called_from_main: true
 
   # ==================== Android 16 - 6.12 构建 ====================
@@ -230,6 +238,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces }}
       artifact_upload_mode: "上传全部"
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+      enable_nomount: ${{ inputs.enable_nomount }}
       called_from_main: true
 
   # ==================== 收集补丁冲突文件 ====================
@@ -396,6 +405,7 @@ jobs:
           echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
           echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
           echo "KPM_STATUS=${{ inputs.use_kpm && '启用' || '禁用' }}" >> $GITHUB_ENV
+          echo "NOMOUNT_STATUS=${{ inputs.enable_nomount && '启用' || '禁用' }}" >> $GITHUB_ENV
 
           # Hook 类型
           if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "ReSukiSU" ]; then
@@ -583,6 +593,7 @@ jobs:
           | BBG 安全补丁 | $BBG_STATUS |
           | ZRAM / LZ4KD | $LZ4_STATUS |
           | KPM | $KPM_STATUS |
+          | NoMount | $NOMOUNT_STATUS |
 
           ### 下载说明
 

@@ -59,7 +59,7 @@ on:
       cve_2026_43499_patch:
         required: false
         type: boolean
-        default: false
+        default: true
       enable_susfs:
         required: true
         type: boolean
@@ -77,6 +77,10 @@ on:
         type: string
         default: "上传全部"
       droidspaces_ntsync:
+        required: false
+        type: boolean
+        default: false
+      enable_nomount:
         required: false
         type: boolean
         default: false
@@ -112,6 +116,7 @@ jobs:
           echo "CVE-2026-43499: ${{ inputs.cve_2026_43499_patch }}"
           echo "Droidspaces   : ${{ inputs.droidspaces }}"
           echo "NTSync        : ${{ inputs.droidspaces_ntsync }}"
+          echo "NoMount       : ${{ inputs.enable_nomount }}"
           echo "产物上传模式  : ${{ inputs.artifact_upload_mode }}"
           echo "Stock Config  : 自动检测 config/stock_defconfig"
           echo "========================================"
@@ -883,6 +888,32 @@ jobs:
                 echo "已修复 exec.c 缺少 susfs_def.h 问题"
               fi
             fi
+          fi
+
+      - name: 应用 NoMount 补丁
+        if: inputs.enable_nomount
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          echo "应用 NoMount 补丁..."
+          git clone --depth 1 https://github.com/maxsteeel/nomount.git /tmp/nomount
+
+          KERNEL_VER="${{ inputs.kernel_version }}"
+          case "$KERNEL_VER" in
+            5.10) PATCH="nomount_5.10_kernel_integration.patch" ;;
+            5.15) PATCH="nomount_5.15_kernel_integration.patch" ;;
+            6.1)  PATCH="nomount_6.1_kernel_integration.patch" ;;
+            6.6)  PATCH="nomount_6.6_kernel_integration.patch" ;;
+            6.12) PATCH="nomount_6.12_kernel_integration.patch" ;;
+            *) echo "未知内核版本: $KERNEL_VER，跳过 NoMount"; exit 0 ;;
+          esac
+
+          if [ -f "/tmp/nomount/kernel/patches/$PATCH" ]; then
+            patch -p1 < "/tmp/nomount/kernel/patches/$PATCH" || echo "NoMount 补丁应用失败（可能已应用或上下文不匹配）"
+            cp /tmp/nomount/kernel/src/* ./fs/ 2>/dev/null || echo "复制 NoMount 源码失败"
+            echo "CONFIG_NOMOUNT=y" >> arch/arm64/configs/gki_defconfig
+            echo "NoMount 集成完成"
+          else
+            echo "未找到 $KERNEL_VER 的 NoMount 补丁，跳过"
           fi
 
       - name: 克隆 NTsync 补丁仓库

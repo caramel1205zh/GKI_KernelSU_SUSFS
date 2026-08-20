@@ -73,10 +73,15 @@ on:
         description: "应用 CVE-2026-43499 rtmutex 修复链"
         required: false
         type: boolean
-        default: false
+        default: true
       cancel_susfs:
         description: "禁用 SUSFS"
         required: true
+        type: boolean
+        default: false
+      enable_nomount:
+        description: "启用 NoMount"
+        required: false
         type: boolean
         default: false
       supp_op:
@@ -112,7 +117,7 @@ on:
       cve_2026_43499_patch:
         required: false
         type: boolean
-        default: false
+        default: true
       cancel_susfs:
         required: false
         type: boolean
@@ -128,6 +133,10 @@ on:
         type: string
         default: "上传全部"
       droidspaces_ntsync:
+        required: false
+        type: boolean
+        default: false
+      enable_nomount:
         required: false
         type: boolean
         default: false
@@ -178,6 +187,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
       artifact_upload_mode: ${{ inputs.artifact_upload_mode }}
+      enable_nomount: ${{ inputs.enable_nomount || false }}
 
   # 仅在直接触发时运行，从 main.yml 调用时跳过
   get-ksu-manager:
