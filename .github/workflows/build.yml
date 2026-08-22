@@ -890,31 +890,21 @@ jobs:
             fi
           fi
 
-      - name: 应用 NoMount 补丁
+      - name: 应用 NoMount (官方 setup.sh dev 分支)
         if: inputs.enable_nomount
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
-          echo "应用 NoMount 补丁..."
-          git clone --depth 1 https://github.com/maxsteeel/nomount.git /tmp/nomount
+          echo "下载 NoMount setup.sh..."
+          curl -sS https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh -o /tmp/setup.sh
+          chmod +x /tmp/setup.sh
 
-          KERNEL_VER="${{ inputs.kernel_version }}"
-          case "$KERNEL_VER" in
-            5.10) PATCH="nomount_5.10_kernel_integration.patch" ;;
-            5.15) PATCH="nomount_5.15_kernel_integration.patch" ;;
-            6.1)  PATCH="nomount_6.1_kernel_integration.patch" ;;
-            6.6)  PATCH="nomount_6.6_kernel_integration.patch" ;;
-            6.12) PATCH="nomount_6.12_kernel_integration.patch" ;;
-            *) echo "未知内核版本: $KERNEL_VER，跳过 NoMount"; exit 0 ;;
-          esac
+          echo "执行 setup.sh dev（自动克隆 dev 分支并修改 Kconfig/Makefile）..."
+          bash /tmp/setup.sh dev
 
-          if [ -f "/tmp/nomount/kernel/patches/$PATCH" ]; then
-            patch -p1 < "/tmp/nomount/kernel/patches/$PATCH" || echo "NoMount 补丁应用失败（可能已应用或上下文不匹配）"
-            cp /tmp/nomount/kernel/src/* ./fs/ 2>/dev/null || echo "复制 NoMount 源码失败"
-            echo "CONFIG_NOMOUNT=y" >> arch/arm64/configs/gki_defconfig
-            echo "NoMount 集成完成"
-          else
-            echo "未找到 $KERNEL_VER 的 NoMount 补丁，跳过"
-          fi
+          echo "启用 CONFIG_NOMOUNT..."
+          echo "CONFIG_NOMOUNT=y" >> arch/arm64/configs/gki_defconfig
+
+          echo "NoMount 集成完成（dev 分支）"
 
       - name: 克隆 NTsync 补丁仓库
         if: inputs.droidspaces_ntsync
