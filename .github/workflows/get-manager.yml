@@ -13,19 +13,23 @@ on:
       susVer:
         description: "The fetched SUSFS version number"
         value: ${{ jobs.get_ksu_manager.outputs.susVer }}
-
       ksuVer:
         description: "The calculated KSU version number"
         value: ${{ jobs.get_ksu_manager.outputs.ksuVer }}
+      nomount_artifact_name:
+        description: "Name of the NoMount module artifact (if downloaded)"
+        value: ${{ jobs.get_ksu_manager.outputs.nomount_artifact_name }}
 
 jobs:
   get_ksu_manager:
     runs-on: ubuntu-latest
     outputs:
-      # 输出1: KSU版本号
+      # 输出KSU版本号
       ksuVer: ${{ steps.get_version.outputs.kversion }}
-      # 输出2: SUSFS版本号
+      # 输出SUSFS版本号
       susVer: ${{ steps.get_version.outputs.sversion }}
+      # 输出NOMOUNT版本号
+      nomount_artifact_name: ${{ steps.get_nomount.outputs.artifact_name }}
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
@@ -64,7 +68,6 @@ jobs:
       - name: 获取 KSU & SUSFS 版本
         id: get_version
         run: |
-
           if [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
             echo "This is the Next variant"
             git clone https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
@@ -181,7 +184,6 @@ jobs:
           fi
 
           FILENAME=$([[ "${{ inputs.kernelsu_variant }}" == "Next" ]] && echo "build-manager-ci.yml" || echo "build-manager.yml")
-
 
           # 按内核 KSU 版本选择 Manager，避免 APK 版本领先于内核版本
           TARGET_KSU_VERSION="${KSU_VERSION:-}"
@@ -324,9 +326,12 @@ jobs:
           esac
           if [ -n "$LEGACY_RELEASE_TAG" ]; then
             echo "下载 ${{ inputs.kernelsu_variant }} 对应的 SUSFS 模块..."
-            mkdir -p susfs-module
-            curl -fL -o susfs-module/ksu_module_susfs.zip \
+            mkdir -p susfs-download
+            curl -fL -o "susfs-download/ksu_module_susfs.zip" \
               "https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases/download/$LEGACY_RELEASE_TAG/ksu_module_susfs.zip"
+            # 解压到 susfs-extracted
+            mkdir -p susfs-extracted
+            unzip -q "susfs-download/ksu_module_susfs.zip" -d susfs-extracted
             echo "SUSFS_NAME=$LEGACY_SUSFS_VERSION" >> $GITHUB_ENV
             exit 0
           fi
@@ -339,33 +344,16 @@ jobs:
           "https://api.github.com/repos/sidex15/susfs4ksu-module/actions/runs/$BUILD_ID/artifacts")
 
           DOWNLOAD_URL=$(echo "$ARTIFACTS" | jq -r '.artifacts[0].archive_download_url')
+          ARTIFACT_NAME=$(echo "$ARTIFACTS" | jq -r '.artifacts[0].name')
+          echo "SUSFS_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
 
-          NAME=$(echo "$ARTIFACTS" | jq -r '.artifacts[0].name')
-          echo "SUSFS_NAME=$NAME" >> $GITHUB_ENV
-          NAME="susfs-$NAME.zip"
+          echo "下载 SUSFS artifact: $ARTIFACT_NAME"
+          mkdir -p susfs-download
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o "susfs-download/$ARTIFACT_NAME.zip" "$DOWNLOAD_URL"
 
-          echo $DOWNLOAD_URL
-          echo $NAME
-          # 下载 Manager 文件
-          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o "$NAME" "$DOWNLOAD_URL"
-          echo "$NAME 文件已下载.zip"
-
-
-          # 解压 artifact zip 获取里面的模块文件
-          mkdir -p susfs-module
-          unzip "$NAME" -d susfs-temp
-
-          # 检查解压后的内容：如果是散装文件则打包成 zip
-          cd susfs-temp
-          if ls *.zip 1>/dev/null 2>&1; then
-            # 里面已经是 zip 文件，直接移动
-            mv *.zip ../susfs-module/
-          else
-            # 是散装文件，打包成 zip
-            zip -r "../susfs-module/ksu_module_susfs.zip" .
-          fi
-          cd ..
-          rm -rf susfs-temp "$NAME"
+          # 解压到 susfs-extracted 目录
+          mkdir -p susfs-extracted
+          unzip -q "susfs-download/$ARTIFACT_NAME.zip" -d susfs-extracted
 
       - name: Notify on failure
         if: steps.add_KSU.outcome == 'failure'
@@ -373,18 +361,19 @@ jobs:
 
       - name: 上传APK
         if: steps.add_KSU.outcome == 'success'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.kernelsu_variant }}-Manager(${{ env.KSU_VERSION }})
           path: |
             manager-artifacts/**/*.apk
 
-      - name: 上传SUSFS模块
+      - name: 上传SUSFS模块（沿用上游 artifact 名称）
         if: steps.add_SUSFS.outcome == 'success'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: susfs-${{ env.SUSFS_NAME }}
-          path: ./susfs-module/*
+          path: susfs-extracted/*
+          compression-level: 9
 
       - name: 获取 NoMount 模块 (dev 分支)
         id: get_nomount
@@ -420,17 +409,23 @@ jobs:
             exit 0
           fi
 
-          echo "找到 artifact: $ARTIFACT_NAME"
-          mkdir -p nomount-module
-          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o "nomount-module/${ARTIFACT_NAME}.zip" "$ARTIFACT_URL"
+          echo "找到上游 artifact 名称: $ARTIFACT_NAME"
 
-          # 输出 artifact 名称供后续步骤使用
+          # 下载 zip 到临时目录
+          mkdir -p nomount-download
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -o "nomount-download/${ARTIFACT_NAME}.zip" "$ARTIFACT_URL"
+
+          # 解压到目标目录（避免上传 artifact 时出现 zip 套 zip）
+          mkdir -p nomount-extracted
+          unzip -q "nomount-download/${ARTIFACT_NAME}.zip" -d nomount-extracted
+
+          # 输出 artifact 名称，供后续步骤使用
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
-      - name: 上传 NoMount 模块
+      - name: 上传 NoMount 模块（沿用上游 artifact 名称）
         if: steps.get_nomount.outputs.artifact_name != ''
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.get_nomount.outputs.artifact_name }}
-          path: nomount-module/*.zip
+          path: nomount-extracted/*
           compression-level: 9
