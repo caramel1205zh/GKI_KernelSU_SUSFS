@@ -360,6 +360,9 @@ jobs:
             exit 1
           fi
 
+      - name: 备份基准 defconfig
+        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
+
       - name: 提取实际子版本号
         run: |
           ACTUAL_SUBLEVEL="${{ inputs.sub_level }}"
@@ -603,9 +606,6 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
-
-      - name: 备份基准 defconfig
-        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
 
       - name: 集成 NTsync 支持
         if: inputs.droidspaces_ntsync

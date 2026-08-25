@@ -345,5 +345,11 @@ if [ "$KSU_VARIANT" == "Official" ] || [ "$KSU_VARIANT" == "Next" ] || [ "$KSU_V
       fi
       echo "已修复 exec.c 缺少 susfs_def.h 问题"
     fi
+
+    # 修复 fs/open.c 中 getname_flags 调用参数过多
+    if grep -q 'getname_flags(filename, lookup_flags, NULL)' ./fs/open.c; then
+      sed -i 's/getname_flags(filename, lookup_flags, NULL)/getname_flags(filename, lookup_flags)/' ./fs/open.c
+      echo "已修复 getname_flags 调用参数 (fs/open.c)"
+    fi
   fi
 fi
