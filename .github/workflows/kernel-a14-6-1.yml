@@ -13,10 +13,6 @@ on:
         type: choice
         options:
           - Official
-          #- Next
-          - SukiSU
-          - SukiSU(40726)
-          - SukiSU(40548)
           - ReSukiSU
         default: ReSukiSU
       version:
@@ -27,12 +23,12 @@ on:
         description: "自定义构建时间 (可选，N或留空=当前UTC)"
         required: false
         type: string
-        default: "Sun Dec 01 08:10:00 UTC 2024"
+        default: "N"
       use_kpm:
         description: "启用 KPM 功能"
         required: true
         type: boolean
-        default: false
+        default: true
       droidspaces:
         description: "Droidspaces 容器支持"
         required: false
@@ -42,7 +38,7 @@ on:
           - "678"
           - "123"
           - "345"
-        default: "off"
+        default: "678"
       artifact_upload_mode:
         description: "构建产物上传模式"
         required: true
@@ -55,17 +51,17 @@ on:
         description: "启用 Droidspaces 容器 NTSync 支持（需启用 Droidspaces）"
         required: false
         type: boolean
-        default: false
+        default: true
       use_zram:
         description: "启用 ZRAM 增强算法"
         required: true
         type: boolean
-        default: false
+        default: true
       use_bbg:
         description: "启用 BBG 防格机"
         required: true
         type: boolean
-        default: false
+        default: true
       use_rekernel:
         description: "启用 Re-Kernel 驱动"
         required: false
@@ -97,7 +93,7 @@ on:
       build_time:
         required: false
         type: string
-        default: "Sun Dec 01 08:10:00 UTC 2024"
+        default: "N"
       use_zram:
         required: true
         type: boolean
@@ -121,7 +117,7 @@ on:
       droidspaces:
         required: false
         type: string
-        default: "off"
+        default: "678"
       artifact_upload_mode:
         required: false
         type: string
@@ -129,7 +125,7 @@ on:
       droidspaces_ntsync:
         required: false
         type: boolean
-        default: false
+        default: true
       enable_nomount:
         required: false
         type: boolean
@@ -147,52 +143,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          #- sub_level: "25"
-          #  os_patch_level: "2023-10"
-          #- sub_level: "43"
-          #  os_patch_level: "2023-11"
-          #- sub_level: "57"
-          #  os_patch_level: "2024-01"
-          #- sub_level: "68"
-          #  os_patch_level: "2024-03"
-          - sub_level: "75"
-            os_patch_level: "2024-05"
-          - sub_level: "78"
-            os_patch_level: "2024-06"
-          - sub_level: "84"
-            os_patch_level: "2024-07"
-          - sub_level: "90"
-            os_patch_level: "2024-08"
-          - sub_level: "93"
-            os_patch_level: "2024-09"
-          - sub_level: "99"
-            os_patch_level: "2024-10"
-          - sub_level: "112"
-            os_patch_level: "2024-11"
-          - sub_level: "115"
-            os_patch_level: "2024-12"
-          - sub_level: "118"
-            os_patch_level: "2025-01"
-          - sub_level: "124"
-            os_patch_level: "2025-02"
-          - sub_level: "128"
-            os_patch_level: "2025-03"
-          - sub_level: "129"
-            os_patch_level: "2025-04"
-          - sub_level: "134"
-            os_patch_level: "2025-05"
           - sub_level: "138"
             os_patch_level: "2025-06"
-          - sub_level: "141"
-            os_patch_level: "2025-07"
-          - sub_level: "145"
-            os_patch_level: "2025-09"
-          - sub_level: "157"
-            os_patch_level: "2025-12"
-          - sub_level: "162"
-            os_patch_level: "2026-03"
-          - sub_level: "X"
-            os_patch_level: "lts"
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:

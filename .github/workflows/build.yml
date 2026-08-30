@@ -497,6 +497,7 @@ jobs:
             "ReSukiSU")
               echo "添加 ReSukiSU..."
               curl -LSs "https://raw.githubusercontent.com/mikugirls/ReSukiSU/main/kernel/setup.sh" | bash $BRANCH
+              bash "$GITHUB_WORKSPACE/scripts/ksu_post_setup.sh" KernelSU resukisu
               ;;
             *)
               if [ -z "$LEGACY_SUKISU_CONFIG" ]; then

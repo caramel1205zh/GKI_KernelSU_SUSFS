@@ -16,6 +16,8 @@
 
 </div>
 
+注意：此分支来自 https://github.com/mikugirls/GKI_KernelSU_SUSFS 并且合入一些有意思的修改，优先为 REDMI K70P 适配
+
 ## 🚀 快速导航
 
 - 📖 [文档](https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki)
