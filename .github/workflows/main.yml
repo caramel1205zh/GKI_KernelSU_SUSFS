@@ -181,7 +181,7 @@ jobs:
   # ==================== Android 14 - 6.1 构建 ====================
   build-a14-6-1:
     if: inputs.build_a14_6_1 || inputs.build_all
-    uses: ./.github/workflows/kernel-a14-6-1.yml
+    uses: ./.github/workflows/manet.yml
     secrets: inherit
     with:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}

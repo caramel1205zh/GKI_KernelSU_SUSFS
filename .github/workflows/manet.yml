@@ -23,7 +23,7 @@ on:
         description: "自定义构建时间 (可选，N或留空=当前UTC)"
         required: false
         type: string
-        default: "N"
+        default: "Wed Dec 03 02:05:30 UTC 2025"
       use_kpm:
         description: "启用 KPM 功能"
         required: true
@@ -81,7 +81,7 @@ on:
         description: "启用 NoMount"
         required: false
         type: boolean
-        default: false
+        default: true
   workflow_call:
     inputs:
       kernelsu_variant:
@@ -93,7 +93,7 @@ on:
       build_time:
         required: false
         type: string
-        default: "N"
+        default: "Wed Dec 03 02:05:30 UTC 2025"
       use_zram:
         required: true
         type: boolean
@@ -129,7 +129,7 @@ on:
       enable_nomount:
         required: false
         type: boolean
-        default: false
+        default: true
       called_from_main:
         description: "是否从 main.yml 调用（内部使用）"
         required: false
